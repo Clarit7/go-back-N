@@ -1,4 +1,4 @@
-# go-back-N
+# Selective repeat
 
 Reference Code : https://github.com/haseeb-saeed/go-back-N
 

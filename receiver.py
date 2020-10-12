@@ -1,4 +1,4 @@
-# receiver.py - The receiver in the reliable data transer protocol
+# receiver.py - The receiver in the reliable data transfer protocol
 import packet
 import socket
 import sys
@@ -19,6 +19,8 @@ def receive(sock):
     global mutex
 
     expected_num = 0
+    buffer = []  # 버퍼
+
     while True:
         mutex.acquire()
         pkt, addr = udt.recv(sock)
@@ -33,10 +35,21 @@ def receive(sock):
             udt.send(pkt, sock, addr)
             rtt_q.append([pkt, sock, addr])
             rtt_timer.append(time.time())
-            expected_num += 1
+            if len(buffer) == 0:
+                expected_num += 1
+            else:
+                buffer.append(seq_num)
+                buffer.sort()
+                print('Buffer delivering')   # 수신하지 못했던 패킷이 수신되면 버퍼를 비움
+                while (len(buffer) > 0 and buffer[0] == expected_num):
+                    buffer.pop(0)
+                    expected_num += 1
         else:                        # 오류로 인해 순서가 잘못 수신되는 경우
-            print('Unexpected packet. Sending ACK', expected_num - 1)
-            pkt = packet.make(expected_num - 1)
+            if expected_num < seq_num:
+                buffer.append(seq_num)  # 버퍼에 패킷을 추가함
+                buffer.sort()           # 버퍼 정렬
+            print('Buffering. Sending ACK', seq_num)
+            pkt = packet.make(seq_num)
             udt.send(pkt, sock, addr)
             rtt_q.append([pkt, sock, addr])
             rtt_timer.append(time.time())

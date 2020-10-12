@@ -69,7 +69,7 @@ def send(sock):
         while next_to_send < base + window_size:
             rtt_q.append([packets[next_to_send], sock, RECEIVER_ADDR])
             current_time = time.time()
-            print('Sending packet', next_to_send, 'Time', round(time.time() - process_start_time, 3), 'seconds')
+            print('Sending packet', next_to_send, 'Time', round(current_time - process_start_time, 3), 'seconds')
             print('Window state:', min(base, num_packets - 1), 'to', min(WINDOW_SIZE, num_packets - base) + base - 1)
             rtt_timer.append(current_time)
             time.sleep(UNIT_TIME)
@@ -86,7 +86,9 @@ def send(sock):
         if send_timer.timeout():
             print('Timeout')
             send_timer.stop();
-            next_to_send = base
+            rtt_q.append([packets[base], sock, RECEIVER_ADDR])  # Timeout된 패킷 다시 전송
+            rtt_timer.append(time.time())
+            send_timer.start();
         else:
             window_size = set_window_size(num_packets)
         mutex.release()
@@ -116,14 +118,24 @@ def receive(sock, num_packets):
     global process_start_time
 
     print('Window state:', base, 'to', min(WINDOW_SIZE, num_packets - base) + base - 1)
+
+    ack_list = [];
+    ack_current = 0;
+
     while True:
         pkt, _ = udt.recv(sock);
         ack, _ = packet.extract(pkt);
 
         mutex.acquire()
         print('Got ACK', ack, 'Time', round(time.time() - process_start_time, 3), 'seconds')
-        if (ack >= base):
-            base = ack + 1
+        if ack not in ack_list:
+            ack_list.append(ack)  # 수신한 ack의 리스트를 만듦
+
+        while (ack_current in ack_list): # 가장작은 unACKed 번호를 구함
+            ack_current += 1
+
+        if (base < ack_current):  # Window의 시작점을 가장 작은 unACKed packet 번호까지 한꺼번에 이동
+            base = ack_current
             print('Window state:', min(base, num_packets - 1), 'to', min(WINDOW_SIZE, num_packets - base) + base - 1)
             send_timer.stop()
 
